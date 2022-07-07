@@ -3,7 +3,7 @@
 cd ..
 
 # custom config
-DATA=/path/to/datasets
+DATA=/home/v-wangfeng/data/clip_data
 TRAINER=CoOp
 
 DATASET=$1
@@ -13,7 +13,7 @@ NCTX=$4  # number of context tokens
 SHOTS=$5  # number of shots (1, 2, 4, 8, 16)
 CSC=$6  # class-specific context (False or True)
 
-for SEED in 1 2 3
+for SEED in 4
 do
     DIR=output/${DATASET}/${TRAINER}/${CFG}_${SHOTS}shots/nctx${NCTX}_csc${CSC}_ctp${CTP}/seed${SEED}
     if [ -d "$DIR" ]; then

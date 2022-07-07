@@ -49,7 +49,6 @@ class TextEncoder(nn.Module):
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_final(x).type(self.dtype)
-
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
@@ -68,6 +67,11 @@ class PromptLearner(nn.Module):
         clip_imsize = clip_model.visual.input_resolution
         cfg_imsize = cfg.INPUT.SIZE[0]
         assert cfg_imsize == clip_imsize, f"cfg_imsize ({cfg_imsize}) must equal to clip_imsize ({clip_imsize})"
+
+        # add a projection layer
+        # self.att_proj = nn.Sequential(nn.ReLU(), nn.Linear(1000, 1000, dtype=dtype))
+        # self.att_proj = nn.Identity()
+        self.att_proj = nn.Parameter(torch.eye(1000, dtype=dtype))
 
         if ctx_init:
             # use given words to initialize context vectors
@@ -192,6 +196,8 @@ class CustomCLIP(nn.Module):
         self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
 
+        self.att_proj = self.prompt_learner.att_proj
+
     def forward(self, image):
         image_features = self.image_encoder(image.type(self.dtype))
 
@@ -203,7 +209,20 @@ class CustomCLIP(nn.Module):
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
         logit_scale = self.logit_scale.exp()
-        logits = logit_scale * image_features @ text_features.t()
+
+        logits = logit_scale * image_features @ text_features.t() @ self.att_proj
+        # baseline 63.53%
+        # add a 1000x1000 layer: 57.64% (16 shots)
+        #               attr     base
+        # 4 shots:     50.01    59.66
+        # 8 shots:     54.1     61.20
+        # 16 shots:    57.64    63.53
+        # 32 shots:    61.29    63.92
+        # 64 shots:    64.59    64.57
+        # 128 shots:            64.98
+        # 256 shots:            65.10
+
+        
 
         return logits
 
@@ -235,9 +254,8 @@ class CoOp(TrainerX):
 
         print("Turning off gradients in both the image and the text encoder")
         for name, param in self.model.named_parameters():
-            if "prompt_learner" not in name:
+            if "prompt_learner" not in name and "att_proj" not in name:
                 param.requires_grad_(False)
-
         if cfg.MODEL.INIT_WEIGHTS:
             load_pretrained_weights(self.model.prompt_learner, cfg.MODEL.INIT_WEIGHTS)
 
