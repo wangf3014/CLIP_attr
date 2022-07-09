@@ -219,8 +219,8 @@ class CustomCLIP(nn.Module):
         # 16 shots:    57.64    63.53
         # 32 shots:    61.29    63.92
         # 64 shots:    64.59    64.57
-        # 128 shots:            64.98
-        # 256 shots:            65.10
+        # 128 shots:   66.99    64.98
+        # 256 shots:   68.86    65.10
 
         
 
