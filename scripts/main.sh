@@ -12,6 +12,7 @@ CTP=$3  # class token position (end or middle)
 NCTX=$4  # number of context tokens
 SHOTS=$5  # number of shots (1, 2, 4, 8, 16)
 CSC=$6  # class-specific context (False or True)
+ATTR=$7
 
 for SEED in 4
 do
@@ -26,6 +27,7 @@ do
         --dataset-config-file configs/datasets/${DATASET}.yaml \
         --config-file configs/trainers/${TRAINER}/${CFG}.yaml \
         --output-dir ${DIR} \
+        --num_attrs ${ATTR} \
         TRAINER.COOP.N_CTX ${NCTX} \
         TRAINER.COOP.CSC ${CSC} \
         TRAINER.COOP.CLASS_TOKEN_POSITION ${CTP} \

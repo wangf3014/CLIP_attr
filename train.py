@@ -72,6 +72,9 @@ def reset_cfg(cfg, args):
 
     if args.head:
         cfg.MODEL.HEAD.NAME = args.head
+    
+    if args.num_attrs:
+        cfg.MODEL.ATTRS = args.num_attrs
 
 
 def extend_cfg(cfg):
@@ -203,5 +206,10 @@ if __name__ == "__main__":
         nargs=argparse.REMAINDER,
         help="modify config options using the command-line",
     )
+
+    # arguments for clip attr
+    parser.add_argument("--num_attrs", type=int, default=0.,
+        help="number of attributes, set 0 for class name based prompts only")
+    
     args = parser.parse_args()
     main(args)

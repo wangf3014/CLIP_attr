@@ -66,12 +66,18 @@ class PromptLearner(nn.Module):
         ctx_dim = clip_model.ln_final.weight.shape[0]
         clip_imsize = clip_model.visual.input_resolution
         cfg_imsize = cfg.INPUT.SIZE[0]
+        self.num_attrs = cfg.ATTRS
         assert cfg_imsize == clip_imsize, f"cfg_imsize ({cfg_imsize}) must equal to clip_imsize ({clip_imsize})"
 
-        # add a projection layer
-        # self.att_proj = nn.Sequential(nn.ReLU(), nn.Linear(1000, 1000, dtype=dtype))
-        # self.att_proj = nn.Identity()
-        self.att_proj = nn.Parameter(torch.eye(1000, dtype=dtype))
+        if self.num_attrs > 0:
+            # add a projection layer
+            # self.att_proj = nn.Sequential(nn.ReLU(), nn.Linear(1000, 1000, dtype=dtype))
+            # self.att_proj = nn.Identity()
+            att_proj_base = torch.eye(n_cls, dtype=dtype)
+            att_proj_add = torch.randn(self.num_attrs, n_cls, dtype=dtype) * 0.02
+            att_proj = torch.cat([att_proj_base, att_proj_add], dim=0)
+            self.att_proj = nn.Parameter(att_proj)
+            self.ctx_attr = nn.Parameter(torch.randn(self.num_attrs, n_ctx, ctx_dim, dtype=dtype) * 0.02)
 
         if ctx_init:
             # use given words to initialize context vectors
@@ -103,6 +109,11 @@ class PromptLearner(nn.Module):
         name_lens = [len(_tokenizer.encode(name)) for name in classnames]
         prompts = [prompt_prefix + " " + name + "." for name in classnames]
 
+        if self.num_attrs > 0:
+            # attribute prompts
+            prompts_attr = [prompt_prefix + "." for i in range(self.num_attrs)]
+            prompts += prompts_attr
+
         tokenized_prompts = torch.cat([clip.tokenize(p) for p in prompts])
         with torch.no_grad():
             embedding = clip_model.token_embedding(tokenized_prompts).type(dtype)
@@ -123,6 +134,10 @@ class PromptLearner(nn.Module):
         ctx = self.ctx
         if ctx.dim() == 2:
             ctx = ctx.unsqueeze(0).expand(self.n_cls, -1, -1)
+        
+        if self.num_attrs > 0:
+            ctx_attr = self.ctx_attr
+            ctx = torch.cat([ctx, ctx_attr], dim=0)
 
         prefix = self.token_prefix
         suffix = self.token_suffix
@@ -196,8 +211,6 @@ class CustomCLIP(nn.Module):
         self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
 
-        self.att_proj = self.prompt_learner.att_proj
-
     def forward(self, image):
         image_features = self.image_encoder(image.type(self.dtype))
 
@@ -210,7 +223,11 @@ class CustomCLIP(nn.Module):
 
         logit_scale = self.logit_scale.exp()
 
-        logits = logit_scale * image_features @ text_features.t() @ self.att_proj
+        if self.prompt_learner.num_attrs > 0:
+            att_proj = self.prompt_learner.att_proj
+            logits = logit_scale * image_features @ text_features.t() @ att_proj
+        else:
+            logits = logit_scale * image_features @ text_features.t() 
         # baseline 63.53%
         # add a 1000x1000 layer: 57.64% (16 shots)
         #               attr     base
@@ -221,8 +238,6 @@ class CustomCLIP(nn.Module):
         # 64 shots:    64.59    64.57
         # 128 shots:   66.99    64.98
         # 256 shots:   68.86    65.10
-
-        
 
         return logits
 

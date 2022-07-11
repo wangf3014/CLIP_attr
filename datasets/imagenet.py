@@ -85,8 +85,6 @@ class ImageNet(DatasetBase):
             classname = classnames[folder]
             for imname in imnames:
                 impath = os.path.join(split_dir, folder, imname)
-                print(impath)
-                raise
                 item = Datum(impath=impath, label=label, classname=classname)
                 items.append(item)
 
